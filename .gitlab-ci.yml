@@ -1,0 +1,25 @@
+# Sample GitLab CI: scan with DepScan (Stage 3). Copy into your repo root.
+# DepScan auto-detects GITLAB_CI and switches to plain logs.
+stages:
+  - scan
+
+depscan:
+  stage: scan
+  image: eclipse-temurin:17-jre
+  before_script:
+    - curl -sL -o dep-scan.jar "https://github.com/VortexV7/dep-scan/releases/download/v0.5.0/dep-scan-0.5.0.jar"
+  script:
+    - java -jar dep-scan.jar scan . --format sarif --fail-on critical --out depscan.sarif
+    - java -jar dep-scan.jar report . --format pdf --out depscan-report.pdf
+  artifacts:
+    when: always
+    paths:
+      - depscan.sarif
+      - depscan-report.pdf
+    reports:
+      # GitLab parses this SAST report into the Security dashboard.
+      sast: depscan.sarif
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "schedule"

@@ -1,0 +1,9 @@
+failOn: high
+ignore:
+  - id: CVE-2022-1471
+    package: org.yaml:snakeyaml
+    reason: Only used in tests, never on untrusted input
+    expires: 2027-06-30
+  - id: GHSA-599f-7c49-w659
+    reason: Accepted risk while we migrate off commons-text
+    expires: 2026-12-31

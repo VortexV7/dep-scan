@@ -1,0 +1,1 @@
+{"dependencies":{"lodash":"^4.17.20","minimist":"^1.2.5"},"description":"Sample npm project for DepScan: lodash is imported and called (reachable), minimist is listed but never imported (unreachable).","main":"index.js","name":"vulnerable-npm-app","version":"1.0.0"}

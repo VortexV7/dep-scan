@@ -1,0 +1,16 @@
+# DepScan config - copy to depscan.yml in your project root, or pass with
+#   depscan scan . --config path/to/depscan.yml
+# DepScan auto-loads depscan.yml from the scanned project dir if present.
+
+# Default threshold when --fail-on is not given on the command line:
+# critical | reachable | high | none
+failOn: critical
+
+# Ignore list. Every entry needs an id, a justification (reason) and an
+# expiry date. Expired ignores stop applying and the finding counts again.
+# Ignored findings are still shown in the report, under IGNORED.
+ignore:
+  - id: CVE-2022-1471
+    package: org.yaml:snakeyaml
+    reason: Only used in tests, never on untrusted input
+    expires: 2027-06-30

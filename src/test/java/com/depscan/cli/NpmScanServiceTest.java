@@ -1,0 +1,81 @@
+package com.depscan.cli;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import com.depscan.osv.OsvClient;
+import com.depscan.osv.Vulnerability;
+import com.depscan.report.ScanReport;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
+
+class NpmScanServiceTest {
+
+    private static OsvClient fakeOsv() {
+        Map<String, List<Vulnerability>> canned = Map.of(
+                "npm:lodash:4.17.20", List.of(
+                        new Vulnerability("GHSA-29mw-wpgm-hmr9", "ReDoS in lodash", "HIGH", 7.5,
+                                "4.17.21", List.of(), List.of(), List.of("CVE-2020-8203"))),
+                "npm:minimist:1.2.5", List.of(
+                        new Vulnerability("GHSA-xvch-5gv4-984h", "Prototype pollution in minimist",
+                                "CRITICAL", 9.8, "1.2.6", List.of(), List.of(), List.of("CVE-2021-44906"))));
+        return dep -> canned.getOrDefault(dep.coordinates(), List.of());
+    }
+
+    @Test
+    void sampleNpmAppLodashReachableMinimistNot() throws Exception {
+        ScanReport r = new ScanService(fakeOsv()).scan(Path.of("samples/vulnerable-npm-app"));
+        assertEquals(2, r.findings().size(), r.findings().toString());
+        assertEquals(1, r.criticalCount());
+        assertEquals(2, r.dependenciesScanned(), "lodash + minimist");
+        var crit = r.findings().stream().filter(f -> f.reachable()).findFirst().orElseThrow();
+        assertEquals("GHSA-29mw-wpgm-hmr9", crit.vulnerability().id());
+        assertTrue(crit.location().contains("index.js:3"), "import site (require is line 3), got: " + crit.location());
+        assertTrue(crit.evidence().contains("PACKAGE"), crit.evidence());
+        var low = r.findings().stream().filter(f -> !f.reachable()).findFirst().orElseThrow();
+        assertEquals("GHSA-xvch-5gv4-984h", low.vulnerability().id());
+        assertTrue(low.location().contains("package.json"), "unreachable points at the manifest, got: " + low.location());
+    }
+
+    @Test
+    void bothEcosystemsMergeIntoOneReport() throws Exception {
+        // A folder with pom.xml AND package.json scans both; the Maven sample
+        // plus a package.json next to it must not error and must merge.
+        var dir = Files.createTempDirectory("both-eco");
+        Files.copy(Path.of("samples/vulnerable-app/pom.xml"), dir.resolve("pom.xml"));
+        Files.copy(Path.of("samples/vulnerable-npm-app/package.json"), dir.resolve("package.json"));
+        Files.copy(Path.of("samples/vulnerable-npm-app/package-lock.json"), dir.resolve("package-lock.json"));
+        Files.copy(Path.of("samples/vulnerable-npm-app/index.js"), dir.resolve("index.js"));
+        Files.createDirectories(dir.resolve("src/main/java/com/example/app"));
+        for (String f : List.of("App.java", "InterpolatorService.java", "UnusedHelper.java")) {
+            Files.copy(Path.of("samples/vulnerable-app/src/main/java/com/example/app/" + f),
+                    dir.resolve("src/main/java/com/example/app/" + f));
+        }
+        OsvClient both = dep -> {
+            if (dep.coordinates().startsWith("npm:")) return fakeOsv().query(dep);
+            if (dep.coordinates().equals("org.apache.commons:commons-text:1.9")) return List.of(
+                    new Vulnerability("GHSA-599f-7c49-w659", "Text4Shell", "CVSS_V3:9.8", 9.8,
+                            "1.10.0", List.of(), List.of("org.apache.commons.text.StringSubstitutor.createInterpolator")));
+            if (dep.coordinates().equals("org.yaml:snakeyaml:1.31")) return List.of(
+                    new Vulnerability("GHSA-9w3m-gqgf-c4p9", "SnakeYAML", "CVSS_V3:7.5", 7.5,
+                            "1.32", List.of(), List.of()));
+            return List.of();
+        };
+        ScanReport r = new ScanService(both).scan(dir);
+        assertTrue(r.findings().stream().anyMatch(f -> f.dependency().isNpm()), "npm findings present");
+        assertTrue(r.findings().stream().anyMatch(f -> !f.dependency().isNpm()), "Maven findings present");
+        assertEquals(2, r.criticalCount(), "commons-text + lodash reachable");
+    }
+
+    @Test
+    void folderWithNeitherManifestErrorsNamingBoth() {
+        var dir = Path.of(System.getProperty("java.io.tmpdir"));
+        var ex = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class,
+                () -> new ScanService(fakeOsv()).scan(dir));
+        assertTrue(ex.getMessage().contains("pom.xml"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("package.json"), ex.getMessage());
+    }
+}

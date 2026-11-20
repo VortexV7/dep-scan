@@ -1,0 +1,4 @@
+# Sample Python project for DepScan: pyyaml is imported and called (reachable),
+# flask is listed but never imported anywhere (unreachable).
+pyyaml==5.3.1
+flask==2.0.1

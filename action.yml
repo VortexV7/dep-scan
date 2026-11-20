@@ -1,0 +1,67 @@
+# DepScan GitHub Action (composite) — Stage 3.
+# Usage in your repo:
+#   - uses: VortexV7/dep-scan@v0.5.0
+#     with:
+#       path: .
+#       fail-on: critical
+name: 'DepScan'
+description: 'Reachability-aware vulnerability scanner for Maven, npm and Python projects (OSV.dev)'
+branding:
+  icon: 'shield'
+  color: 'red'
+inputs:
+  path:
+    description: 'Maven project directory to scan'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Fail when breached: critical, reachable, high or none'
+    required: false
+    default: 'critical'
+  format:
+    description: 'Report format: text, json or sarif'
+    required: false
+    default: 'sarif'
+  version:
+    description: 'DepScan release version to download'
+    required: false
+    default: '0.5.0'
+  java-version:
+    description: 'Java version to set up'
+    required: false
+    default: '17'
+outputs:
+  critical:
+    description: 'Number of reachable (CRITICAL) findings'
+    value: ${{ steps.scan.outputs.critical }}
+  low:
+    description: 'Number of unreachable (LOW) findings'
+    value: ${{ steps.scan.outputs.low }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Java
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ inputs.java-version }}
+        distribution: 'temurin'
+    - name: Download DepScan
+      shell: bash
+      run: |
+        curl -sL -o dep-scan.jar \
+          "https://github.com/VortexV7/dep-scan/releases/download/v${{ inputs.version }}/dep-scan-${{ inputs.version }}.jar"
+    - name: Scan
+      id: scan
+      shell: bash
+      run: |
+        java -jar dep-scan.jar scan "${{ inputs.path }}" \
+          --format "${{ inputs.format }}" --fail-on "${{ inputs.fail-on }}" \
+          --out depscan-report.txt
+        # Count findings from the text report for the action outputs.
+        echo "critical=$(grep -c 'CRITICAL' depscan-report.txt || true)" >> "$GITHUB_OUTPUT"
+        echo "low=$(grep -c 'LOW' depscan-report.txt || true)" >> "$GITHUB_OUTPUT"
+      # Note: upload depscan-report.txt / a SARIF file with
+      # github/codeql-action/upload-sarif in your workflow (see
+      # .github/workflows/depscan.yml). The exit code above fails the job
+      # when --fail-on is breached; annotations + step summary are emitted
+      # by DepScan itself when it detects GITHUB_ACTIONS.
