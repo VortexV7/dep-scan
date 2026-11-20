@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DepScan — GitHub Actions Setup</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --accent:#0ea5e9;
+    --teal:#14b8a6; --text:#e2e8f0; --muted:#94a3b8; --red:#ef4444; --amber:#f59e0b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    line-height:1.6; padding:28px 32px 48px; max-width:860px; margin:0 auto; }
+  .eyebrow { color:var(--accent); font-size:12px; letter-spacing:2px; font-weight:600; }
+  h1 { font-size:26px; margin:6px 0 4px; }
+  .sub { color:var(--muted); margin-bottom:20px; }
+  h2 { font-size:17px; margin:28px 0 8px; padding-top:20px; border-top:1px solid var(--line); }
+  h2 .n { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center;
+    background:var(--accent); color:#fff; border-radius:50%; font-size:13px; margin-right:8px; }
+  p, li { font-size:14px; }
+  ul, ol { padding-left:22px; margin:8px 0; }
+  li { margin:4px 0; }
+  code { font-family:"JetBrains Mono",Consolas,monospace; font-size:13px;
+    background:#020617; padding:1px 5px; border-radius:3px; }
+  .codeblock { position:relative; background:#020617; border:1px solid var(--line);
+    border-radius:6px; margin:10px 0; overflow:auto; }
+  .codeblock pre { padding:14px 16px; font-family:"JetBrains Mono",Consolas,monospace;
+    font-size:12.5px; line-height:1.55; color:#cbd5e1; white-space:pre; }
+  .copy-btn { position:absolute; top:8px; right:8px; background:var(--card); color:var(--accent);
+    border:1px solid var(--accent); border-radius:4px; font-size:11px; padding:4px 10px;
+    cursor:pointer; font-family:inherit; }
+  .copy-btn:hover { background:rgba(14,165,233,.15); }
+  .add-btn { display:inline-block; background:var(--accent); color:#fff; border:none;
+    border-radius:6px; font-size:14px; font-weight:600; padding:11px 20px; cursor:pointer;
+    font-family:inherit; margin:10px 0 4px; }
+  .add-btn:hover { background:#0284c7; }
+  .add-btn:disabled { opacity:.55; cursor:default; }
+  .add-status { display:none; margin:8px 0; padding:10px 14px; border-radius:6px; font-size:13px; }
+  .add-status.ok { display:block; background:rgba(20,184,166,.12); border:1px solid var(--teal); color:#5eead4; }
+  .add-status.err { display:block; background:rgba(239,68,68,.12); border:1px solid var(--red); color:#fca5a5; }
+  .add-status code { background:rgba(0,0,0,.3); }
+  .note { background:rgba(245,158,11,.08); border:1px solid var(--amber); border-radius:6px;
+    padding:10px 14px; font-size:13px; margin:10px 0; color:#fcd34d; }
+  .note b { color:#fde68a; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13px; }
+  th, td { border:1px solid var(--line); padding:7px 10px; text-align:left; }
+  th { background:var(--card); color:var(--muted); font-weight:600; }
+  .cwd { color:var(--muted); font-size:12px; margin:2px 0 0; word-break:break-all; }
+  .footer { margin-top:32px; padding-top:14px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="eyebrow">DEPSCAN DESKTOP · CI SETUP</div>
+<h1>GitHub Actions Setup</h1>
+<p class="sub">Scan your Maven or npm project automatically on every push and pull request.</p>
+<button class="add-btn" type="button">Add to this project</button>
+<p class="cwd" id="cwd-line">Current project folder: loading…</p>
+<div class="add-status" id="add-status"></div>
+
+<h2><span class="n">1</span>What DepScan does in GitHub Actions</h2>
+<ul>
+  <li><b>Scans on every push and pull request</b> to <code>main</code>, plus once a week (Monday 06:00 UTC).</li>
+  <li><b>Reachable vulnerabilities fail the build</b> — a dependency your code actually calls, with a known CVE, blocks the merge.</li>
+  <li><b>Unreachable vulnerabilities are still reported</b> as warnings, never hidden.</li>
+  <li>Results appear as <b>annotations on the exact file and line</b> in the pull request, as a <b>SARIF report in Security → Code scanning</b>, and as a <b>summary table</b> on the workflow run.</li>
+</ul>
+
+<h2><span class="n">2</span>Add the workflow file</h2>
+<p>Create this file in your repository: <code>.github/workflows/depscan.yml</code></p>
+<div class="codeblock"><button class="copy-btn" type="button" onclick="copyCode(this)">Copy</button><pre><code># Sample workflow: scan your project with DepScan on every push / PR
+# and weekly. Copy this file into your own repo's .github/workflows/.
+# Requires: DepScan 0.5.0 release jar (see action.yml), GitHub code scanning
+# permission for the SARIF upload.
+name: DepScan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC
+
+permissions:
+  contents: read
+  security-events: write # needed for upload-sarif to code scanning
+  actions: read
+
+jobs:
+  depscan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Download DepScan
+        run: |
+          curl -sL -o dep-scan.jar \
+            "https://github.com/VortexV7/dep-scan/releases/download/v0.5.0/dep-scan-0.5.0.jar"
+      - name: Scan (SARIF + text report)
+        run: |
+          java -jar dep-scan.jar scan . --format sarif --fail-on critical --out depscan.sarif || echo "scan-exit=$?"
+          java -jar dep-scan.jar scan . --fail-on critical --out depscan-report.txt || true
+          # The first scan's exit code is the real gate: re-run it as the
+          # failing step so the job fails only on reachable vulnerabilities.
+          java -jar dep-scan.jar scan . --fail-on critical
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: depscan.sarif
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: depscan-reports
+          path: |
+            depscan.sarif
+            depscan-report.txt
+</code></pre></div>
+<div class="note"><b>Note:</b> the sample downloads the DepScan <code>v0.5.0</code> release jar. If a newer DepScan release exists, update the version number in the download URL to match.</div>
+<p>Or let the app write it for you — click <b>Add to this project</b> at the top of this page. It writes the file into the project folder currently open in DepScan Desktop.</p>
+
+<h2><span class="n">3</span>Push and watch it run</h2>
+<ol>
+  <li>Commit the file and push to GitHub: <code>git add .github/workflows/depscan.yml &amp;&amp; git commit -m "Add DepScan security scan" &amp;&amp; git push</code></li>
+  <li>Open your repository → <b>Actions</b> tab → the <b>DepScan</b> workflow run.</li>
+  <li>When it finishes, open the run to see the Markdown summary table of findings.</li>
+</ol>
+
+<h2><span class="n">4</span>Where to see the results</h2>
+<ul>
+  <li><b>Pull request files:</b> reachable findings show as <code>::error</code> annotations on the exact file and line; unreachable ones as <code>::warning</code>.</li>
+  <li><b>Security → Code scanning alerts:</b> the uploaded <code>depscan.sarif</code> appears here as code-scanning alerts.</li>
+  <li><b>Actions run → Summary:</b> a table of every finding (package, version, advisory, severity, location).</li>
+  <li><b>Artifacts:</b> the <code>depscan-reports</code> artifact holds <code>depscan.sarif</code> and the text report.</li>
+</ul>
+
+<h2><span class="n">5</span>Exit codes — what passes and what fails</h2>
+<table>
+  <tr><th>Exit code</th><th>Meaning</th><th>Build result</th></tr>
+  <tr><td>0</td><td>No reachable vulnerabilities</td><td>Pass</td></tr>
+  <tr><td>1</td><td>A reachable (CRITICAL) vulnerability was found</td><td>Fail</td></tr>
+  <tr><td>2</td><td>Usage or configuration error (e.g. no pom.xml / package.json)</td><td>Fail</td></tr>
+  <tr><td>3</td><td>Network error and no cached OSV data</td><td>Fail</td></tr>
+</table>
+<p>The workflow uses <code>--fail-on critical</code>, so only reachable findings fail the build. Change it to <code>--fail-on none</code> to report without ever failing.</p>
+
+<div class="footer">DepScan Desktop v0.5.0 · This guide works fully offline — no internet needed.</div>
+<script>
+  function copyCode(btn) {
+    var code = btn.parentElement.querySelector('code').innerText;
+    function done() { btn.textContent = 'Copied ✓'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1500); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(function(){ fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = code; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  }
+  function showStatus(el, ok, html) {
+    el.className = 'add-status ' + (ok ? 'ok' : 'err');
+    el.innerHTML = html;
+  }
+  function bindAddButtons(type) {
+    var btns = document.querySelectorAll('.add-btn');
+    var status = document.getElementById('add-status');
+    var cwdEl = document.getElementById('cwd-line');
+    if (window.depscan && window.depscan.getCwd) {
+      window.depscan.getCwd().then(function(d){ if (d && cwdEl) cwdEl.textContent = 'Current project folder: ' + d; });
+    }
+    btns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        btn.disabled = true; btn.textContent = 'Writing…';
+        window.depscan.addCiFile(type).then(function(res) {
+          btn.disabled = false; btn.textContent = 'Add to this project';
+          if (!res || !res.ok) { showStatus(status, false, 'Could not write the file: ' + (res && res.error ? res.error : 'unknown error')); return; }
+          var msg = (res.existed ? 'Updated existing file' : 'File written') + ': <code>' + res.path + '</code>';
+          showStatus(status, true, '✓ ' + msg + '<br>Commit this file and push — your CI will pick it up automatically.');
+        }).catch(function(err){ btn.disabled = false; btn.textContent = 'Add to this project'; showStatus(status, false, 'Could not write the file: ' + err.message); });
+      });
+    });
+  }
+
+bindAddButtons('github');
+</script>
+</body>
+</html>

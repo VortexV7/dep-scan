@@ -1,0 +1,51 @@
+# Sample workflow: scan your project with DepScan on every push / PR
+# and weekly. Copy this file into your own repo's .github/workflows/.
+# Requires: DepScan 0.5.0 release jar (see action.yml), GitHub code scanning
+# permission for the SARIF upload.
+name: DepScan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1' # weekly, Monday 06:00 UTC
+
+permissions:
+  contents: read
+  security-events: write # needed for upload-sarif to code scanning
+  actions: read
+
+jobs:
+  depscan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Download DepScan
+        run: |
+          curl -sL -o dep-scan.jar \
+            "https://github.com/VortexV7/dep-scan/releases/download/v0.5.0/dep-scan-0.5.0.jar"
+      - name: Scan (SARIF + text report)
+        run: |
+          java -jar dep-scan.jar scan . --format sarif --fail-on critical --out depscan.sarif || echo "scan-exit=$?"
+          java -jar dep-scan.jar scan . --fail-on critical --out depscan-report.txt || true
+          # The first scan's exit code is the real gate: re-run it as the
+          # failing step so the job fails only on reachable vulnerabilities.
+          java -jar dep-scan.jar scan . --fail-on critical
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: depscan.sarif
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: depscan-reports
+          path: |
+            depscan.sarif
+            depscan-report.txt

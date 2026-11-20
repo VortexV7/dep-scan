@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DepScan — Jenkins Setup</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --line:#334155; --accent:#0ea5e9;
+    --teal:#14b8a6; --text:#e2e8f0; --muted:#94a3b8; --red:#ef4444; --amber:#f59e0b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:"Segoe UI",system-ui,-apple-system,sans-serif;
+    line-height:1.6; padding:28px 32px 48px; max-width:860px; margin:0 auto; }
+  .eyebrow { color:var(--accent); font-size:12px; letter-spacing:2px; font-weight:600; }
+  h1 { font-size:26px; margin:6px 0 4px; }
+  .sub { color:var(--muted); margin-bottom:20px; }
+  h2 { font-size:17px; margin:28px 0 8px; padding-top:20px; border-top:1px solid var(--line); }
+  h2 .n { display:inline-block; width:26px; height:26px; line-height:26px; text-align:center;
+    background:var(--accent); color:#fff; border-radius:50%; font-size:13px; margin-right:8px; }
+  p, li { font-size:14px; }
+  ul, ol { padding-left:22px; margin:8px 0; }
+  li { margin:4px 0; }
+  code { font-family:"JetBrains Mono",Consolas,monospace; font-size:13px;
+    background:#020617; padding:1px 5px; border-radius:3px; }
+  .codeblock { position:relative; background:#020617; border:1px solid var(--line);
+    border-radius:6px; margin:10px 0; overflow:auto; }
+  .codeblock pre { padding:14px 16px; font-family:"JetBrains Mono",Consolas,monospace;
+    font-size:12.5px; line-height:1.55; color:#cbd5e1; white-space:pre; }
+  .copy-btn { position:absolute; top:8px; right:8px; background:var(--card); color:var(--accent);
+    border:1px solid var(--accent); border-radius:4px; font-size:11px; padding:4px 10px;
+    cursor:pointer; font-family:inherit; }
+  .copy-btn:hover { background:rgba(14,165,233,.15); }
+  .add-btn { display:inline-block; background:var(--accent); color:#fff; border:none;
+    border-radius:6px; font-size:14px; font-weight:600; padding:11px 20px; cursor:pointer;
+    font-family:inherit; margin:10px 0 4px; }
+  .add-btn:hover { background:#0284c7; }
+  .add-btn:disabled { opacity:.55; cursor:default; }
+  .add-status { display:none; margin:8px 0; padding:10px 14px; border-radius:6px; font-size:13px; }
+  .add-status.ok { display:block; background:rgba(20,184,166,.12); border:1px solid var(--teal); color:#5eead4; }
+  .add-status.err { display:block; background:rgba(239,68,68,.12); border:1px solid var(--red); color:#fca5a5; }
+  .add-status code { background:rgba(0,0,0,.3); }
+  .note { background:rgba(245,158,11,.08); border:1px solid var(--amber); border-radius:6px;
+    padding:10px 14px; font-size:13px; margin:10px 0; color:#fcd34d; }
+  .note b { color:#fde68a; }
+  table { border-collapse:collapse; width:100%; margin:10px 0; font-size:13px; }
+  th, td { border:1px solid var(--line); padding:7px 10px; text-align:left; }
+  th { background:var(--card); color:var(--muted); font-weight:600; }
+  .cwd { color:var(--muted); font-size:12px; margin:2px 0 0; word-break:break-all; }
+  .footer { margin-top:32px; padding-top:14px; border-top:1px solid var(--line);
+    color:var(--muted); font-size:12px; }
+</style>
+</head>
+<body>
+<div class="eyebrow">DEPSCAN DESKTOP · CI SETUP</div>
+<h1>Jenkins Setup</h1>
+<p class="sub">Scan your Maven or npm project automatically on every Jenkins build.</p>
+<button class="add-btn" type="button">Add to this project</button>
+<p class="cwd" id="cwd-line">Current project folder: loading…</p>
+<div class="add-status" id="add-status"></div>
+
+<h2><span class="n">1</span>What DepScan does in Jenkins</h2>
+<ul>
+  <li>A <b>Pipeline job</b> checks out your repository and runs DepScan on it.</li>
+  <li><b>Reachable vulnerabilities fail the build</b> — a dependency your code actually calls, with a known CVE, turns the build red.</li>
+  <li><b>Unreachable vulnerabilities are still reported</b> in the log and the HTML report, never hidden.</li>
+  <li>The SARIF report and the HTML report are <b>archived as build artifacts</b>, so you can download them from any build.</li>
+</ul>
+
+<h2><span class="n">2</span>Add the Jenkinsfile</h2>
+<p>Create this file in the <b>root of your repository</b>: <code>Jenkinsfile</code></p>
+<div class="codeblock"><button class="copy-btn" type="button" onclick="copyCode(this)">Copy</button><pre><code>// Sample Jenkins pipeline: scan with DepScan (Stage 3). Copy into your repo root.
+// DepScan auto-detects JENKINS_URL and switches to plain logs.
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+    }
+    stages {
+        stage('Download DepScan') {
+            steps {
+                sh 'curl -sL -o dep-scan.jar "https://github.com/VortexV7/dep-scan/releases/download/v0.5.0/dep-scan-0.5.0.jar"'
+            }
+        }
+        stage('Scan') {
+            steps {
+                // Exit code 1 fails the build only when --fail-on is breached.
+                sh 'java -jar dep-scan.jar scan . --format sarif --fail-on critical --out depscan.sarif'
+                sh 'java -jar dep-scan.jar report . --format html --out depscan-report.html'
+            }
+        }
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'depscan.sarif, depscan-report.html', allowEmptyArchive: true
+            // If the Warnings Next Generation plugin is installed, it can
+            // parse depscan.sarif as a SARIF report.
+        }
+    }
+}
+</code></pre></div>
+<div class="note"><b>Important:</b> the pipeline uses a JDK tool named <code>jdk17</code>. In Jenkins go to <b>Manage Jenkins → Tools → JDK installations</b> and make sure a JDK 17+ installation exists with the name <code>jdk17</code> (or edit the name in the file to match yours). The sample downloads the DepScan <code>v0.5.0</code> release jar — update the version in the URL if a newer release exists.</div>
+<p>Or let the app write it for you — click <b>Add to this project</b> at the top of this page. It writes the file into the project folder currently open in DepScan Desktop.</p>
+
+<h2><span class="n">3</span>Create the Pipeline job</h2>
+<ol>
+  <li>In Jenkins: <b>New Item → Pipeline</b>, give it a name, click OK.</li>
+  <li>Under <b>Pipeline → Definition</b> choose <b>Pipeline script from SCM</b>.</li>
+  <li>Choose <b>Git</b>, enter your repository URL and credentials, set the branch (usually <code>main</code>).</li>
+  <li>Leave <b>Script Path</b> as <code>Jenkinsfile</code> and save.</li>
+  <li>Click <b>Build Now</b>. Jenkins checks out the repo, finds the Jenkinsfile, and runs the scan.</li>
+</ol>
+
+<h2><span class="n">4</span>Where to see the results</h2>
+<ul>
+  <li><b>Console Output:</b> the full DepScan report — each finding with package, version, advisory ID, severity and file:line location.</li>
+  <li><b>Build Artifacts:</b> <code>depscan.sarif</code> and <code>depscan-report.html</code> are archived on every build — open the HTML report right in Jenkins.</li>
+  <li><b>Build status:</b> red when a reachable vulnerability is found (exit code 1), green when clean.</li>
+  <li>If the <b>Warnings Next Generation</b> plugin is installed, it can parse <code>depscan.sarif</code> as a SARIF report.</li>
+</ul>
+
+<h2><span class="n">5</span>Exit codes — what passes and what fails</h2>
+<table>
+  <tr><th>Exit code</th><th>Meaning</th><th>Build result</th></tr>
+  <tr><td>0</td><td>No reachable vulnerabilities</td><td>Pass</td></tr>
+  <tr><td>1</td><td>A reachable (CRITICAL) vulnerability was found</td><td>Fail</td></tr>
+  <tr><td>2</td><td>Usage or configuration error (e.g. no pom.xml / package.json)</td><td>Fail</td></tr>
+  <tr><td>3</td><td>Network error and no cached OSV data</td><td>Fail</td></tr>
+</table>
+<p>DepScan auto-detects Jenkins (via <code>JENKINS_URL</code>) and switches to plain, colour-free logs that read cleanly in the Jenkins console.</p>
+
+<div class="footer">DepScan Desktop v0.5.0 · This guide works fully offline — no internet needed.</div>
+<script>
+  function copyCode(btn) {
+    var code = btn.parentElement.querySelector('code').innerText;
+    function done() { btn.textContent = 'Copied ✓'; setTimeout(function(){ btn.textContent = 'Copy'; }, 1500); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done).catch(function(){ fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = code; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      document.body.removeChild(ta);
+    }
+  }
+  function showStatus(el, ok, html) {
+    el.className = 'add-status ' + (ok ? 'ok' : 'err');
+    el.innerHTML = html;
+  }
+  function bindAddButtons(type) {
+    var btns = document.querySelectorAll('.add-btn');
+    var status = document.getElementById('add-status');
+    var cwdEl = document.getElementById('cwd-line');
+    if (window.depscan && window.depscan.getCwd) {
+      window.depscan.getCwd().then(function(d){ if (d && cwdEl) cwdEl.textContent = 'Current project folder: ' + d; });
+    }
+    btns.forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        btn.disabled = true; btn.textContent = 'Writing…';
+        window.depscan.addCiFile(type).then(function(res) {
+          btn.disabled = false; btn.textContent = 'Add to this project';
+          if (!res || !res.ok) { showStatus(status, false, 'Could not write the file: ' + (res && res.error ? res.error : 'unknown error')); return; }
+          var msg = (res.existed ? 'Updated existing file' : 'File written') + ': <code>' + res.path + '</code>';
+          showStatus(status, true, '✓ ' + msg + '<br>Commit this file and push — your CI will pick it up automatically.');
+        }).catch(function(err){ btn.disabled = false; btn.textContent = 'Add to this project'; showStatus(status, false, 'Could not write the file: ' + err.message); });
+      });
+    });
+  }
+
+bindAddButtons('jenkins');
+</script>
+</body>
+</html>

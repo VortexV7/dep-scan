@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DepScan Desktop</title>
+<link rel="stylesheet" href="../node_modules/xterm/css/xterm.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============ BOOT SCREEN: logo first, then the app ============ -->
+<div id="boot">
+  <div class="boot-inner">
+    <pre id="boot-logo"> ____            ____
+|  _ \  ___ _ __/ ___|  ___ __ _ _ __
+| | | |/ _ \ '_ \___ \ / __/ _` | '_ \
+| |_| |  __/ |_) |__) | (_| (_| | | | |
+|____/ \___| .__/____/ \___\__,_|_| |_|
+           |_|</pre>
+    <div id="boot-sub">DEPSCAN DESKTOP &nbsp;·&nbsp; v0.5.0</div>
+    <div id="boot-bar-wrap"><div id="boot-bar"></div></div>
+    <div id="boot-log"></div>
+    <div id="boot-skip">press any key to skip</div>
+  </div>
+</div>
+
+<!-- ============ MAIN LAYOUT ============ -->
+<div id="app" class="hidden">
+  <header id="topbar">
+    <div class="brand">DepScan <span class="dim">Desktop</span></div>
+    <div class="top-mid">
+      <span id="clock">--:--:--</span>
+      <span id="top-sys" class="dim">CPU --% · RAM --%</span>
+    </div>
+    <div class="top-right">
+      <span id="java-badge" class="badge">JAVA: checking…</span>
+      <button class="win-btn" id="btn-full" title="Fullscreen (F11)">⛶</button>
+      <button class="win-btn" id="btn-min" title="Minimize">—</button>
+      <button class="win-btn close" id="btn-close" title="Close (Ctrl+Q)">✕</button>
+    </div>
+  </header>
+
+  <main id="layout">
+    <!-- LEFT: file browser + scan target + CI setup -->
+    <section id="left" class="panel">
+      <h2>FILE SYSTEM</h2>
+      <div id="cwd-label" class="mono small dim">…</div>
+      <div id="file-list"></div>
+      <h2>SCAN TARGET</h2>
+      <div id="target-box" class="mono small">samples/vulnerable-app</div>
+      <button id="btn-browse" class="btn">BROWSE FOLDER…</button>
+      <button id="btn-scan-sample" class="btn primary">▶ SCAN SAMPLE PROJECT</button>
+      <button id="btn-scan-target" class="btn primary">▶ SCAN THIS FOLDER</button>
+      <button id="btn-report-pdf" class="btn">⬇ PDF REPORT</button>
+      <h2>CI SETUP</h2>
+      <div class="small dim ci-note">Add DepScan to your project's CI pipeline — step-by-step guide:</div>
+      <button id="btn-ci-github" class="btn ci">GitHub Actions</button>
+      <button id="btn-ci-jenkins" class="btn ci">Jenkins</button>
+      <h2>QUICK COMMANDS</h2>
+      <div class="quick">
+        <button data-cmd="help">help</button>
+        <button data-cmd="scan --help">scan --help</button>
+        <button data-cmd="scan --format sarif --out depscan.sarif">scan → sarif</button>
+        <button data-cmd="scan --offline">scan --offline</button>
+        <button data-cmd="clear">clear</button>
+      </div>
+    </section>
+
+    <!-- CENTER: terminal -->
+    <section id="center" class="panel">
+      <div class="panel-head">
+        <span>TERMINAL</span>
+        <span class="dim small">type <b>help</b> — try: <b>scan samples/vulnerable-app</b></span>
+      </div>
+      <div id="terminal"></div>
+    </section>
+
+    <!-- RIGHT: system monitor + findings -->
+    <section id="right" class="panel">
+      <h2>SYSTEM MONITOR</h2>
+      <div class="meter"><label>CPU</label><div class="meter-bar"><div id="cpu-bar"></div></div><span id="cpu-val">--%</span></div>
+      <div class="meter"><label>RAM</label><div class="meter-bar"><div id="ram-bar"></div></div><span id="ram-val">--%</span></div>
+      <canvas id="cpu-graph" width="260" height="70"></canvas>
+      <div id="sys-lines" class="mono small"></div>
+      <h2>FINDINGS <span id="find-count" class="badge">0</span></h2>
+      <div id="findings"><div class="dim small">No scan yet. Run a scan and findings appear here.</div></div>
+    </section>
+  </main>
+
+  <footer id="statusbar">
+    <span id="status">READY</span>
+    <span class="dim">F11 fullscreen · Ctrl+Q quit · click a folder to set scan target</span>
+    <button id="btn-kbd" class="btn small">⌨ KEYBOARD</button>
+  </footer>
+
+  <div id="keyboard" class="hidden"></div>
+</div>
+
+<script src="../node_modules/xterm/lib/xterm.js"></script>
+<script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>
